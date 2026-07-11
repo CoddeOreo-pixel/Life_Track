@@ -19,7 +19,7 @@
 ---
 
 <p align="center">
-  <img src="screenshots/dashboard.png" alt="Life_Track 今日仪表盘截图" width="700" style="border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);">
+  <img src="https://cdn.jsdelivr.net/gh/CoddeOreo-pixel/Life_Track/screenshots/dashboard.png" alt="Life_Track 今日仪表盘截图" width="700" style="border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);">
 </p>
 
 ---
