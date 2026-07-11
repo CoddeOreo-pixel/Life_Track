@@ -1,0 +1,15 @@
+node_modules/
+out/
+dist/
+*.log
+.DS_Store
+Thumbs.db
+.vite/
+*.tsbuildinfo
+data/
+# 图标源文件（已生成 build/icon.png，源图无需提交）
+Life_Track.png
+# 审查报告（内部文档，不上传公开仓库）
+BUG_REVIEW_REPORT.md
+# 内部设计文档（README 已涵盖设计理念）
+界面风格与视觉主题.txt
