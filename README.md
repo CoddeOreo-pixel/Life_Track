@@ -18,6 +18,12 @@
 
 ---
 
+<p align="center">
+  <img src="screenshots/dashboard.png" alt="Life_Track 今日仪表盘截图" width="700" style="border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);">
+</p>
+
+---
+
 ## 为什么做这个
 
 人对「今天到底干了啥」的记忆严重失真——你以为自己在专注写代码，回头一看，一下午都在刷短视频。市面上的时间追踪软件要么得手动起停计时器（忘一次就漏一天），要么只给你一堆冷冰冰的时长数字，不告诉你这些数字意味着什么。
