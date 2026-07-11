@@ -100,6 +100,8 @@ npm install
 npm run dev
 ```
 
+> 💡 不想折腾？直接从 [Releases](https://github.com/CoddeOreo-pixel/Life_Track/releases) 下载 `Life_Track Setup x.x.x.exe` 安装即可，无需配置开发环境。
+
 应用启动后会自动最小化到系统托盘，点击托盘图标或任务栏图标即可打开主界面。
 
 ### 打包成安装包
