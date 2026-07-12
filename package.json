@@ -1,6 +1,6 @@
 {
   "name": "life-track",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "本地时间追踪仪表盘 —— 自动采集窗口与鼠标活跃度，AI 生成每日灵魂总结",
   "main": "out/main/index.js",
   "author": "Life_Track",
