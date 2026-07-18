@@ -40,13 +40,13 @@ function poll(): void {
   const key = `${win.processName}|${win.title}|${todayStr(new Date(now))}`
 
   if (currentSession && currentSession.key === key) {
-    // 同段，更新 end_time + duration
+    // 同段，更新 end_time + duration，并同步最新的 display_name 和 category
     const duration = now - currentSession.startTime
     const stmt = getDb().prepare(
-      'UPDATE window_sessions SET end_time = ?, duration_ms = ? WHERE id = ?'
+      'UPDATE window_sessions SET end_time = ?, duration_ms = ?, app_display_name = ?, app_category = ? WHERE id = ?'
     )
     try {
-      stmt.bind([now, duration, currentSession.id])
+      stmt.bind([now, duration, mapping.displayName, mapping.category, currentSession.id])
       stmt.step()
     } finally {
       stmt.free()
@@ -85,14 +85,16 @@ function poll(): void {
 /** 采集间隔（ms），用于 resume 时重建定时器 */
 let intervalMsCache = 2000
 
-/** 启动窗口采集 */
-export function startWindowCollector(intervalMs = 2000): void {
+/** 启动窗口采集
+ *  @param intervalMs 轮询间隔
+ *  @param skipFirstPoll 跳过首次立即 poll，用于启动时若上次为暂停态避免写入 0 时长脏 session */
+export function startWindowCollector(intervalMs = 2000, skipFirstPoll = false): void {
   intervalMsCache = intervalMs
   if (timer) clearInterval(timer)
   collecting = true
-  poll() // 立即采集一次
+  if (!skipFirstPoll) poll() // 立即采集一次
   timer = setInterval(poll, intervalMs)
-  console.log(`[Life_Track] 窗口采集器已启动 (间隔 ${intervalMs}ms)`)
+  console.log(`[Life_Track] 窗口采集器已启动 (间隔 ${intervalMs}ms, skipFirstPoll=${skipFirstPoll})`)
 }
 
 /** 停止窗口采集（退出时调用） */

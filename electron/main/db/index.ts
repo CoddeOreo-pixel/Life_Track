@@ -194,6 +194,7 @@ function seedDefaultSettings(): void {
     ai_api_key: '',
     ai_model: 'gpt-4o-mini',
     ai_enabled: 'true',
+    ai_style: 'balanced',
     user_identity: '',
     auto_start: 'false',
     collecting: 'true'

@@ -46,7 +46,7 @@ export default function App() {
         </nav>
         <div className="sidebar-footer">
           <span className="status-dot"></span>
-          采集中 · v0.1.2
+          采集中 · v0.1.3
         </div>
       </aside>
       <main className="main-content grid-sparse">

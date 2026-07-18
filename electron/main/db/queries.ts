@@ -55,27 +55,28 @@ export function getTopApps(date: string, limit = 5): TopApp[] {
   )
 }
 
-/** 今日总览统计（合并查询减少扫描次数） */
+/** 今日总览统计（2 次查询替代原 4 次子查询，减少索引扫描） */
 export function getOverview(date: string): OverviewStats {
-  // 一次查询同时拿到前台总时长 + Top 应用 + 窗口切换次数
-  const appRow = get<{
-    total: number
-    top_name: string | null
-    top_ms: number | null
-    switches: number
-  }>(
+  // 查询1：前台总时长 + 窗口切换次数（一次扫描 idx_window_date）
+  const sumRow = get<{ total: number; switches: number }>(
     `SELECT
        COALESCE(SUM(duration_ms), 0) AS total,
-       (SELECT app_display_name FROM window_sessions WHERE date = ?
-        GROUP BY app_display_name ORDER BY SUM(duration_ms) DESC LIMIT 1) AS top_name,
-       (SELECT SUM(duration_ms) FROM window_sessions WHERE date = ?
-        GROUP BY app_display_name ORDER BY SUM(duration_ms) DESC LIMIT 1) AS top_ms,
-       (SELECT COUNT(*) FROM window_sessions WHERE date = ?) AS switches
+       COUNT(*) AS switches
      FROM window_sessions WHERE date = ?`,
-    [date, date, date, date]
+    [date]
   )
 
-  // 一次查询拿到活跃/挂机时长 + 鼠标键盘事件
+  // 查询2：Top 应用名 + 时长（一次扫描 + GROUP BY，避免原 SQL 的 3 次冗余子查询）
+  const topRow = get<{ top_name: string; top_ms: number }>(
+    `SELECT app_display_name AS top_name, SUM(duration_ms) AS top_ms
+     FROM window_sessions WHERE date = ?
+     GROUP BY app_display_name
+     ORDER BY top_ms DESC
+     LIMIT 1`,
+    [date]
+  )
+
+  // 查询3：活跃/挂机时长 + 鼠标键盘事件（activity_log 表，独立索引）
   const actRow = get<{
     active_ms: number
     idle_ms: number
@@ -99,12 +100,12 @@ export function getOverview(date: string): OverviewStats {
   const score = totalMs > 0 ? Math.round((activeMs / totalMs) * 100) : 0
 
   return {
-    total_foreground_ms: appRow?.total ?? 0,
+    total_foreground_ms: sumRow?.total ?? 0,
     total_active_ms: activeMs,
     total_idle_ms: idleMs,
-    window_switches: appRow?.switches ?? 0,
-    top_app_name: appRow?.top_name ?? '--',
-    top_app_ms: appRow?.top_ms ?? 0,
+    window_switches: sumRow?.switches ?? 0,
+    top_app_name: topRow?.top_name ?? '--',
+    top_app_ms: topRow?.top_ms ?? 0,
     mouse_move_count: actRow?.mouse_move ?? 0,
     mouse_click_count: actRow?.mouse_click ?? 0,
     key_events: actRow?.keys ?? 0,

@@ -75,10 +75,19 @@ function toggleCollecting(): void {
     pauseWindowCollector()
     pauseActivityCollector()
     setSetting('collecting', 'false')
+    broadcastCollecting(false)
   } else {
     resumeWindowCollector()
     resumeActivityCollector()
     setSetting('collecting', 'true')
+    broadcastCollecting(true)
+  }
+}
+
+/** 向所有渲染进程广播采集状态变更 */
+function broadcastCollecting(collecting: boolean): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('collecting:changed', collecting)
   }
 }
 

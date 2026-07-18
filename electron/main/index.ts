@@ -2,12 +2,13 @@ import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { promises as fs } from 'fs'
 import { initDatabase, closeDatabase, getDb } from './db'
-import { seedAppMappings } from './db/appMappings'
+import { seedAppMappings, repairEmptyDisplayNames } from './db/appMappings'
 import {
   getAllAppMappings,
   setAppBlacklist,
   upsertAppMapping,
-  clearMappingCache
+  clearMappingCache,
+  syncMappingsToHistory
 } from './db/appMappings'
 import {
   startWindowCollector,
@@ -52,6 +53,13 @@ import {
 let mainWindow: BrowserWindow | null = null
 let initialized = false
 let crashCount = 0
+
+/** 向所有渲染进程广播采集状态变更（IPC 切换时调用，托盘切换由 tray.ts 内部广播） */
+function broadcastCollectingState(collecting: boolean): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('collecting:changed', collecting)
+  }
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -100,10 +108,11 @@ function createWindow(): void {
 function startCollecting(): void {
   const pollInterval = (parseInt(getSetting('poll_interval_seconds', '2')) || 2) * 1000
   const idleThreshold = parseInt(getSetting('idle_threshold_seconds', '5')) || 5
-  startWindowCollector(pollInterval)
+  // 若上次退出时处于暂停状态，启动时跳过首次 poll 避免写入 0 时长脏 session
+  const shouldCollect = getSetting('collecting', 'true') !== 'false'
+  startWindowCollector(pollInterval, !shouldCollect)
   startActivityCollector(idleThreshold)
-  // 若上次退出时处于暂停状态，恢复后保持暂停
-  if (getSetting('collecting', 'true') === 'false') {
+  if (!shouldCollect) {
     pauseWindowCollector()
     pauseActivityCollector()
     console.log('[Life_Track] 已恢复为暂停采集状态')
@@ -119,6 +128,8 @@ function registerIpc(): void {
     pauseActivityCollector()
     setSetting('collecting', 'false')
     refreshTray(() => mainWindow)
+    // 通知所有渲染进程同步采集状态（避免托盘切换后设置页 UI 错乱）
+    broadcastCollectingState(false)
     console.log('[Life_Track] 采集已暂停')
   })
   ipcMain.handle('collecting:resume', () => {
@@ -126,6 +137,7 @@ function registerIpc(): void {
     resumeActivityCollector()
     setSetting('collecting', 'true')
     refreshTray(() => mainWindow)
+    broadcastCollectingState(true)
     console.log('[Life_Track] 采集已恢复')
   })
 
@@ -179,7 +191,8 @@ function registerIpc(): void {
       const wasCollecting = isCollecting()
       stopWindowCollector()
       stopActivityCollector()
-      startWindowCollector(pollInterval)
+      // 若暂停态重启，跳过首次 poll，避免写入 0 时长脏 session
+      startWindowCollector(pollInterval, !wasCollecting)
       startActivityCollector(idleThreshold)
       if (!wasCollecting) {
         pauseWindowCollector()
@@ -219,6 +232,23 @@ function registerIpc(): void {
         category as 'work' | 'entertainment' | 'neutral'
       )
       clearMappingCache()
+      syncMappingsToHistory(processName)
+    }
+  )
+  ipcMain.handle(
+    'mappings:updateCategory',
+    (_e, processName: string, category: string) => {
+      const valid = ['work', 'entertainment', 'neutral']
+      if (!valid.includes(category)) {
+        throw new Error(`无效的分类: ${category}`)
+      }
+      upsertAppMapping(
+        processName,
+        '',
+        category as 'work' | 'entertainment' | 'neutral'
+      )
+      clearMappingCache()
+      syncMappingsToHistory(processName)
     }
   )
 
@@ -307,6 +337,8 @@ if (!gotLock) {
   app.whenReady().then(async () => {
     await initDatabase()
     seedAppMappings()
+    // 修复历史脏数据：把 app_mappings 和 window_sessions 里空的 display_name 补上
+    repairEmptyDisplayNames()
     registerIpc()
 
     createWindow()

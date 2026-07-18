@@ -9,7 +9,8 @@ import type {
   DailyTags,
   TagKey,
   DailySummary,
-  AppMappingRow
+  AppMappingRow,
+  SummaryStyle
 } from '../shared/types'
 
 // re-export 共享类型，供渲染进程 import type 使用
@@ -23,7 +24,8 @@ export type {
   DailyTags,
   TagKey,
   DailySummary,
-  AppMappingRow
+  AppMappingRow,
+  SummaryStyle
 } from '../shared/types'
 export { TAG_DEFS } from '../shared/types'
 
@@ -97,6 +99,12 @@ const api = {
         'mappings:add',
         processName,
         displayName,
+        category
+      ) as Promise<void>,
+    updateCategory: (processName: string, category: string) =>
+      ipcRenderer.invoke(
+        'mappings:updateCategory',
+        processName,
         category
       ) as Promise<void>
   },

@@ -50,7 +50,13 @@ export default function Settings() {
 
   useEffect(() => {
     load()
+    // 订阅采集状态变更（托盘切换 / 其他窗口切换时同步本页 UI）
+    const off = window.lifeTrack.on('collecting:changed', (...args: unknown[]) => {
+      const next = args[0] as boolean
+      setCollecting(next)
+    })
     return () => {
+      off()
       if (msgTimer.current !== null) window.clearTimeout(msgTimer.current)
     }
   }, [load])
@@ -109,13 +115,23 @@ export default function Settings() {
     try {
       const next = row.is_blacklist !== 1
       await window.lifeTrack.mappings.setBlacklist(row.process_name, next)
-      setMappings((ms) =>
-        ms.map((m) =>
-          m.process_name === row.process_name
-            ? { ...m, is_blacklist: next ? 1 : 0 }
-            : m
-        )
-      )
+      await load()
+      notify(next ? '已加入黑名单' : '已取消黑名单')
+    } catch (e) {
+      notify(`操作失败：${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** 修改应用分类 */
+  const handleCategoryChange = async (processName: string, category: string) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await window.lifeTrack.mappings.updateCategory(processName, category)
+      await load()
+      notify('分类已更新')
     } catch (e) {
       notify(`操作失败：${e instanceof Error ? e.message : String(e)}`)
     } finally {
@@ -224,6 +240,19 @@ export default function Settings() {
           </select>
         </div>
         <div className="setting-row">
+          <span className="setting-label">总结风格</span>
+          <select
+            className="setting-input"
+            defaultValue={settings.ai_style ?? 'balanced'}
+            onChange={(e) => saveSetting('ai_style', e.target.value)}
+          >
+            <option value="gentle">温柔</option>
+            <option value="balanced">适中</option>
+            <option value="toxic">毒蛇</option>
+          </select>
+        </div>
+        <div className="setting-hint">温柔=治愈鼓励 / 适中=幽默毒舌但不恶意 / 毒蛇=犀利嘲讽不留情面</div>
+        <div className="setting-row">
           <span className="setting-label">你的身份</span>
           <input
             className="setting-input"
@@ -281,6 +310,7 @@ export default function Settings() {
         mappings={mappings}
         onToggle={toggleBlacklist}
         onAdded={load}
+        onCategoryChange={handleCategoryChange}
         notify={notify}
         busy={busy}
       />
@@ -319,12 +349,14 @@ function BlacklistPanel({
   mappings,
   onToggle,
   onAdded,
+  onCategoryChange,
   notify,
   busy
 }: {
   mappings: AppMappingRow[]
   onToggle: (row: AppMappingRow) => void
   onAdded: () => void
+  onCategoryChange: (processName: string, category: string) => void
   notify: (m: string) => void
   busy: boolean
 }) {
@@ -408,7 +440,16 @@ function BlacklistPanel({
               />
               <span className="blacklist-process">{m.process_name}</span>
               <span className="blacklist-display">{m.display_name}</span>
-              <span className="blacklist-cat">{m.category}</span>
+              <select
+                className="setting-input cat-select"
+                value={m.category}
+                onChange={(e) => onCategoryChange(m.process_name, e.target.value)}
+                disabled={busy}
+              >
+                <option value="work">干活</option>
+                <option value="entertainment">摸鱼</option>
+                <option value="neutral">中性</option>
+              </select>
               <button
                 className={m.is_blacklist === 1 ? 'btn-terminal active' : 'btn-terminal'}
                 disabled={busy}

@@ -2,7 +2,7 @@ import { getDb } from '../db'
 import { getSetting, getOverview, getTopApps } from '../db/queries'
 import { getDailyTags } from '../db/tagEngine'
 import { TAG_DEFS } from '../../shared/types'
-import type { DailySummary } from '../../shared/types'
+import type { DailySummary, SummaryStyle } from '../../shared/types'
 
 // ============================================================
 // AI 灵魂总结引擎
@@ -10,7 +10,45 @@ import type { DailySummary } from '../../shared/types'
 // - 调用 OpenAI 兼容 /chat/completions 接口
 // - 写入 daily_summaries（UPSERT）
 // - 每晚定时自动生成
+// - 支持三种语气档位：温柔 / 适中 / 毒蛇
 // ============================================================
+
+/** 读取用户设置的语气档位，默认 balanced */
+function getSummaryStyle(): SummaryStyle {
+  const v = getSetting('ai_style', 'balanced')
+  if (v === 'gentle' || v === 'toxic') return v
+  return 'balanced'
+}
+
+/** 根据档位返回 system 人设描述 */
+function styleSystemPrompt(style: SummaryStyle): string {
+  switch (style) {
+    case 'gentle':
+      return '你是 Life_Track 的灵魂总结官，擅长用温柔、治愈、鼓励的中文总结用户一天的电脑使用情况。' +
+        '语气像一位体贴的朋友，多用正向词汇，关注用户的坚持和进步，即使摸鱼也用包容的态度带过。' +
+        '避免尖锐批评、嘲讽或羞辱性表达。'
+    case 'toxic':
+      return '你是 Life_Track 的灵魂总结官，擅长用极度毒舌、犀利嘲讽、一针见血的中文总结用户一天的电脑使用情况。' +
+        '不留情面地戳穿摸鱼、拖延、低效，可以使用夸张的讽刺、阴阳怪气、修仙反讽等梗，但不要人身攻击或涉及敏感话题。' +
+        '目标是让用户又气又笑、被戳痛了但还想看。'
+    case 'balanced':
+    default:
+      return '你是 Life_Track 的灵魂总结官，擅长用幽默风趣、毒舌但不恶意的中文总结用户一天的电脑使用情况。'
+  }
+}
+
+/** 根据档位返回 prompt 中的写作要求片段 */
+function styleRequirementLine(style: SummaryStyle): string {
+  switch (style) {
+    case 'gentle':
+      return '要求：120-200字，语气温柔治愈，多用鼓励和肯定，可以适度用修仙/养生的梗但偏向"今日修炼有得"，结尾给一句温暖的明日建议，不要用 markdown 语法。'
+    case 'toxic':
+      return '要求：120-200字，语气极度毒舌犀利，尽情嘲讽摸鱼、拖延、低效，可以用修仙/摸鱼/卷王等梗但偏向"今日又是废物的一天"，结尾给一句扎心的明日警告，不要用 markdown 语法。'
+    case 'balanced':
+    default:
+      return '要求：120-200字，可以用修仙/摸鱼/卷王等梗，结尾给一句简短点评或明日建议，不要用 markdown 语法。'
+  }
+}
 
 /** 毫秒转人类可读时长（如 "1小时23分"） */
 function humanMs(ms: number): string {
@@ -99,13 +137,33 @@ function buildPrompt(
   // 用户身份（由用户在设置页自定义，如"大学生"/"前端程序员"/"产品经理"）
   const identity = (getSetting('user_identity', '') || '').trim()
 
-  lines.push(`你是 Life_Track 的灵魂总结官，请根据用户 ${date} 的电脑使用数据，写一段幽默风趣、毒舌但不恶意的中文灵魂总结。`)
-  lines.push('要求：120-200字，可以用修仙/摸鱼/卷王等梗，结尾给一句简短点评或明日建议，不要用 markdown 语法。')
+  // 语气档位（温柔 / 适中 / 毒蛇）
+  const style = getSummaryStyle()
+
+  // 根据档位选择不同的开场白和提示语
+  const styleOpening: Record<SummaryStyle, string> = {
+    gentle: `你是 Life_Track 的灵魂总结官，请根据用户 ${date} 的电脑使用数据，写一段温柔治愈、鼓励向上的中文灵魂总结。`,
+    balanced: `你是 Life_Track 的灵魂总结官，请根据用户 ${date} 的电脑使用数据，写一段幽默风趣、毒舌但不恶意的中文灵魂总结。`,
+    toxic: `你是 Life_Track 的灵魂总结官，请根据用户 ${date} 的电脑使用数据，写一段极度毒舌、犀利嘲讽、不留情面的中文灵魂总结。`
+  }
+  lines.push(styleOpening[style])
+  lines.push(styleRequirementLine(style))
   lines.push('')
   lines.push('【重要：写作时必须结合以下上下文】')
-  lines.push(`- 当前时间: ${curTime}（请根据时间点选择语气，如深夜可以催促睡觉，清晨可以鼓励早起，午后可以吐槽犯困）`)
+  // 档位相关的"时间语气"提示
+  const timeHint: Record<SummaryStyle, string> = {
+    gentle: '请根据时间点选择语气，如深夜温柔提醒休息，清晨鼓励开启美好一天，午后理解疲惫',
+    balanced: '请根据时间点选择语气，如深夜可以催促睡觉，清晨可以鼓励早起，午后可以吐槽犯困',
+    toxic: '请根据时间点选择语气，如深夜直接痛骂熬夜，清晨嘲讽起不来，午后阴阳怪气犯困'
+  }
+  lines.push(`- 当前时间: ${curTime}（${timeHint[style]}）`)
   if (identity) {
-    lines.push(`- 用户身份: ${identity}（请针对该身份使用相关梗和吐槽点，如程序员谈 bug/代码，大学生谈论文/逃课，产品经理谈需求/PRD）`)
+    const identityHint: Record<SummaryStyle, string> = {
+      gentle: '请针对该身份使用相关暖梗，关注努力和成长',
+      balanced: '请针对该身份使用相关梗和吐槽点，如程序员谈 bug/代码，大学生谈论文/逃课，产品经理谈需求/PRD',
+      toxic: '请针对该身份使用犀利嘲讽，专戳该身份的痛点'
+    }
+    lines.push(`- 用户身份: ${identity}（${identityHint[style]}）`)
   }
   lines.push('')
   lines.push('【今日数据】')
@@ -140,10 +198,19 @@ async function callLLM(prompt: string): Promise<{ text: string; model: string }>
   const baseUrl = (getSetting('ai_base_url', 'https://api.openai.com/v1') || 'https://api.openai.com/v1').replace(/\/+$/, '')
   const apiKey = getSetting('ai_api_key', '')
   const model = getSetting('ai_model', 'gpt-4o-mini') || 'gpt-4o-mini'
+  const style = getSummaryStyle()
 
   if (!apiKey) {
     throw new Error('未配置 AI API Key，请在设置页填写')
   }
+
+  // system 内容 = 档位人设 + 通用的"上下文感知"指令
+  const systemContent =
+    styleSystemPrompt(style) +
+    '你会收到【上下文】（当前时间、用户身份）和【今日数据】两部分信息。' +
+    '写作时必须体现你对当前时间和用户身份的感知：' +
+    '根据时间点调整语气，针对用户身份使用贴切的梗。' +
+    '不要直接复述"当前时间是XX"或"你是XX"，而是自然地融入总结中。'
 
   const url = `${baseUrl}/chat/completions`
   // 30 秒超时，避免 API 响应缓慢或网络故障时无限期挂起
@@ -160,18 +227,11 @@ async function callLLM(prompt: string): Promise<{ text: string; model: string }>
       body: JSON.stringify({
         model,
         messages: [
-          {
-            role: 'system',
-            content: '你是 Life_Track 的灵魂总结官，擅长用幽默毒舌的中文总结用户一天的电脑使用情况。' +
-              '你会收到【上下文】（当前时间、用户身份）和【今日数据】两部分信息。' +
-              '写作时必须体现你对当前时间和用户身份的感知：' +
-              '根据时间点调整语气（深夜催睡、清晨鼓励、午后吐槽犯困），' +
-              '针对用户身份使用贴切的梗（程序员/大学生/产品经理等）。' +
-              '不要直接复述"当前时间是XX"或"你是XX"，而是自然地融入总结中。'
-          },
+          { role: 'system', content: systemContent },
           { role: 'user', content: prompt }
         ],
-        temperature: 0.9,
+        // 毒蛇档稍微提一点随机性，让讽刺更跳脱；温柔档稍降，让语气更稳定
+        temperature: style === 'toxic' ? 1.0 : style === 'gentle' ? 0.8 : 0.9,
         max_tokens: 400
       }),
       signal: controller.signal

@@ -98,6 +98,9 @@ export interface DailySummary {
   is_manual: number
 }
 
+/** AI 总结语气档位：温柔 / 适中 / 毒蛇 */
+export type SummaryStyle = 'gentle' | 'balanced' | 'toxic'
+
 /** 应用映射记录（设置页黑名单管理用） */
 export interface AppMappingRow {
   process_name: string

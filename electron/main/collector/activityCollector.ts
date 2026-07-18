@@ -152,6 +152,9 @@ export function stopActivityCollector(): void {
     try {
       uIOhook.stop()
       uIOhook.removeAllListeners()
+      // 清理 powerMonitor 监听器，避免采集器重启时累积导致内存泄漏
+      powerMonitor.removeAllListeners('lock-screen')
+      powerMonitor.removeAllListeners('unlock-screen')
     } catch {
       /* ignore */
     }
