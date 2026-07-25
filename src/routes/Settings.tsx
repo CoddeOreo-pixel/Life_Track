@@ -17,6 +17,7 @@ export default function Settings() {
   const [collecting, setCollecting] = useState(true)
   const [autoStart, setAutoStart] = useState(false)
   const [mappings, setMappings] = useState<AppMappingRow[]>([])
+  const [clearDate, setClearDate] = useState('')
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -149,6 +150,45 @@ export default function Settings() {
       else notify('已取消导出')
     } catch (e) {
       notify(`导出失败：${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** 清除指定日期数据 */
+  const doClearRange = async () => {
+    if (busy || !clearDate) return
+    setBusy(true)
+    try {
+      const result = await window.lifeTrack.data.clear('range', clearDate, clearDate)
+      if (result) {
+        const total = Object.values(result).reduce((a, b) => a + b, 0)
+        notify(`已删除 ${clearDate} 的数据（共 ${total} 条）`)
+        setClearDate('')
+      } else {
+        notify('已取消删除')
+      }
+    } catch (e) {
+      notify(`删除失败：${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** 清除全部数据 */
+  const doClearAll = async () => {
+    if (busy) return
+    setBusy(true)
+    try {
+      const result = await window.lifeTrack.data.clear('all')
+      if (result) {
+        const total = Object.values(result).reduce((a, b) => a + b, 0)
+        notify(`已清空全部数据（共 ${total} 条）`)
+      } else {
+        notify('已取消删除')
+      }
+    } catch (e) {
+      notify(`删除失败：${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setBusy(false)
     }
@@ -338,6 +378,40 @@ export default function Settings() {
               </button>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* 数据清除 */}
+      <div className="panel panel-danger">
+        <h2 className="panel-title">数据清除</h2>
+        <div className="setting-hint">
+          删除操作不可撤销，建议先导出备份。主进程会弹二次确认对话框。
+        </div>
+        <div className="setting-row">
+          <span className="setting-label">清除指定日期</span>
+          <input
+            className="setting-input"
+            type="date"
+            value={clearDate}
+            onChange={(e) => setClearDate(e.target.value)}
+          />
+          <button
+            className="btn-terminal btn-danger"
+            disabled={busy || !clearDate}
+            onClick={doClearRange}
+          >
+            $ rm date
+          </button>
+        </div>
+        <div className="setting-row">
+          <span className="setting-label">清空全部数据</span>
+          <button
+            className="btn-terminal btn-danger"
+            disabled={busy}
+            onClick={doClearAll}
+          >
+            $ rm -rf all
+          </button>
         </div>
       </div>
     </div>

@@ -234,3 +234,33 @@ export function getAllSettings(): Record<string, string> {
   for (const r of rows) out[r.key] = r.value
   return out
 }
+
+/** 清除数据
+ *  - type='range'：清除 startDate 到 endDate 之间（含）的数据
+ *  - type='all'：清除全部数据
+ *  - 返回各表删除的行数 */
+export function clearData(
+  type: 'range' | 'all',
+  startDate?: string,
+  endDate?: string
+): Record<string, number> {
+  const db = getDb()
+  const tables = ['window_sessions', 'activity_log', 'daily_tags', 'daily_summaries']
+  const result: Record<string, number> = {}
+
+  if (type === 'all') {
+    for (const t of tables) {
+      db.run(`DELETE FROM ${t}`)
+      result[t] = db.getRowsModified()
+    }
+  } else {
+    if (!startDate || !endDate) {
+      throw new Error('range 模式需要提供 startDate 和 endDate')
+    }
+    for (const t of tables) {
+      db.run(`DELETE FROM ${t} WHERE date BETWEEN ? AND ?`, [startDate, endDate])
+      result[t] = db.getRowsModified()
+    }
+  }
+  return result
+}

@@ -790,6 +790,44 @@ body {
 }
 
 /* ============================================================
+   危险操作面板（数据清除等）
+   ============================================================ */
+.panel-danger {
+  border-color: var(--accent-orange);
+  box-shadow: inset 3px 0 0 var(--accent-orange);
+}
+
+.btn-danger {
+  color: var(--accent-orange);
+  border-color: var(--accent-orange);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: var(--accent-orange-subtle);
+}
+
+.btn-danger:active:not(:disabled) {
+  background-color: var(--accent-orange);
+  color: #000;
+}
+
+/* ============================================================
+   时间线筛选栏
+   ============================================================ */
+.timeline-filter {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.timeline-filter-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* ============================================================
    总览卡片行（今日顶部 4 卡）
    ============================================================ */
 .cards-row {

@@ -33,7 +33,8 @@ import {
   getTopAppsRange,
   getSetting,
   setSetting,
-  getAllSettings
+  getAllSettings,
+  clearData
 } from './db/queries'
 import { saveDailyTags, getDailyTags } from './db/tagEngine'
 import {
@@ -61,7 +62,7 @@ function broadcastCollectingState(collecting: boolean): void {
   }
 }
 
-function createWindow(): void {
+function createWindow(startHidden: boolean = false): void {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -80,7 +81,10 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow?.show()
+    // 静默启动（开机自启时）不弹窗，直接进托盘；用户从托盘点击再显示
+    if (!startHidden) {
+      mainWindow?.show()
+    }
     crashCount = 0 // 渲染进程成功加载，重置崩溃计数
   })
 
@@ -308,6 +312,30 @@ function registerIpc(): void {
       return result.filePath
     }
   )
+
+  // 数据清除（删除指定日期范围或全部数据）
+  ipcMain.handle(
+    'data:clear',
+    async (_e, type: 'range' | 'all', startDate?: string, endDate?: string) => {
+      // 二次确认弹窗，防止误删
+      const msg =
+        type === 'all'
+          ? '确认删除全部数据？此操作不可撤销，所有窗口记录、活跃度、标签和总结都会被清空。'
+          : `确认删除 ${startDate} 到 ${endDate} 的数据？此操作不可撤销。`
+      const choice = await dialog.showMessageBox(mainWindow ?? undefined, {
+        type: 'warning',
+        buttons: ['取消', '确认删除'],
+        defaultId: 0,
+        cancelId: 0,
+        title: '数据清除确认',
+        message: msg
+      })
+      if (choice.response !== 1) {
+        return null
+      }
+      return clearData(type, startDate, endDate)
+    }
+  )
 }
 
 /** CSV 单元格转义：含逗号/引号/换行时用双引号包裹，内部引号双写 */
@@ -341,7 +369,12 @@ if (!gotLock) {
     repairEmptyDisplayNames()
     registerIpc()
 
-    createWindow()
+    // 若通过开机自启启动，静默到托盘不弹窗
+    const startHidden = app.getLoginItemSettings().wasOpenedAtLogin
+    createWindow(startHidden)
+    if (startHidden) {
+      console.log('[Life_Track] 检测到开机自启，静默启动到托盘')
+    }
     createTray(() => mainWindow)
     startCollecting()
     startAutoSummaryScheduler()

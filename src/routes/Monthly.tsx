@@ -174,6 +174,51 @@ export default function Monthly() {
     }
   }, [heatData, maxActive, dates])
 
+  // 每日活跃时长柱状图：直观看到每天的绝对活跃量
+  const dailyBarOption = useMemo(() => {
+    const days = dates.map((ds) => parseYmd(ds).d)
+    const activeData = dates.map(
+      (ds) => Math.round((curMap.get(ds)?.active_ms ?? 0) / 60000)
+    )
+    return {
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params: unknown) => {
+          const arr = params as Array<{ dataIndex: number; value: number }>
+          const idx = arr[0]?.dataIndex ?? 0
+          const ds = dates[idx] ?? ''
+          const v = arr[0]?.value ?? 0
+          return `${ds}<br/>活跃 ${formatDuration(v * 60000)}`
+        }
+      },
+      grid: { left: 44, right: 16, top: 16, bottom: 28 },
+      xAxis: {
+        type: 'category',
+        data: days.map(String),
+        axisLabel: { color: '#888', fontSize: 10 },
+        axisLine: { lineStyle: { color: '#333' } },
+        axisTick: { show: false }
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { color: '#888', fontSize: 10, formatter: '{value}m' },
+        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } }
+      },
+      series: [
+        {
+          type: 'bar',
+          data: activeData,
+          itemStyle: {
+            color: '#22c55e',
+            borderRadius: [2, 2, 0, 0]
+          },
+          barMaxWidth: 20
+        }
+      ]
+    }
+  }, [dates, curMap])
+
   return (
     <div className="page">
       <div className="page-header">
@@ -203,6 +248,11 @@ export default function Monthly() {
       <div className="panel">
         <h2 className="panel-title">日活跃度热力图</h2>
         <Chart option={heatOption} height={240} />
+      </div>
+
+      <div className="panel">
+        <h2 className="panel-title">每日活跃时长</h2>
+        <Chart option={dailyBarOption} height={200} />
       </div>
 
       <MonthTopApps topApps={topApps} prevTopApps={prevTopApps} prevRange={`${prevStart} ~ ${prevEnd}`} />

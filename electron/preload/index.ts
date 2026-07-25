@@ -115,6 +115,21 @@ const api = {
       ipcRenderer.invoke('export:data', table, format) as Promise<string | null>
   },
 
+  // ===== 数据清除 =====
+  data: {
+    clear: (
+      type: 'range' | 'all',
+      startDate?: string,
+      endDate?: string
+    ) =>
+      ipcRenderer.invoke(
+        'data:clear',
+        type,
+        startDate,
+        endDate
+      ) as Promise<Record<string, number> | null>
+  },
+
   // ===== 开机自启 =====
   autostart: {
     get: () => ipcRenderer.invoke('autostart:get') as Promise<boolean>,
